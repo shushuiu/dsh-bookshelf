@@ -32,6 +32,7 @@
     "./icon": "./icon.svg"
   },
   "files": [
+    "DEVELOPING.md",
     "index.js",
     "client.js",
     "lib/*.js",

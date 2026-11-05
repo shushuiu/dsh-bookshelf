@@ -50,7 +50,7 @@ plugin/
 
 ## 发布
 
-插件市场（索引文件）与收录（awesome-dsh-plugin PR）的完整流程见 [publish/README.md](publish/README.md)。要点：
+插件市场（索引文件）与收录（awesome-dsh-plugin PR）的完整流程见 [publish/README.md](https://github.com/shushuiu/dsh-bookshelf/blob/main/publish/README.md)。要点：
 
 - 改版本：`package.json` 的 `version` → 重新生成索引 → 重新上传索引文件
 - 「发现」页读的是索引（format 1），npm 源或 git 源都可以；官方目录只把 npm 上有版本的插件放进索引
