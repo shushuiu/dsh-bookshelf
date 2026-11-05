@@ -1,0 +1,7 @@
+# package/build output
+*.tgz
+node_modules/
+
+# local test homes and editor noise
+.testhome*/
+.DS_Store

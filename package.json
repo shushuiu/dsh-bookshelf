@@ -1,0 +1,56 @@
+{
+  "name": "dsh-bookshelf",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness plugin: a 书架 page built from a Douban member's 想读 shelf, paired with your own ebook folder, an in-panel EPUB/PDF/TXT reader, and public-domain downloads.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "douban",
+    "ebook",
+    "epub",
+    "pdf",
+    "reader",
+    "bookshelf"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.0"
+  },
+  "icon": "./icon.svg",
+  "meta": {
+    "title": "书架",
+    "description": "按豆瓣「想读」书单排出的书架：封面、简介、评分，与你自己目录里的电子书（EPUB/PDF/TXT）自动配对，可在面板内直接阅读，也能从公版书库下载。"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ]
+    }
+  }
+}

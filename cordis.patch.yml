@@ -1,0 +1,20 @@
+# Bundle patch layer for dsh-bookshelf.
+#
+# `insert` adds one Loader row: the Host half (index.js) serves the
+# `/api/bookshelf/*` routes — Douban reads, cover cache, library index, EPUB
+# parsing, public-domain downloads — and the package's `dsh.client` declaration
+# makes the Web app load `./client`, which registers the 书架 page and its
+# sidebar entry.
+#
+# `config.doubanUserId` is optional: leave it empty (the default) and the panel
+# asks for the id on first run, then stores it in prefs.json. Set it here only
+# when the bundle is meant to show one fixed member.
+# `config.libraryDir` is the folder holding your own ebooks; leave it empty and
+# pick the folder from 书架 → 设置 instead (that choice is stored separately and
+# wins over this value).
+- insert:
+    - id: bookshelf
+      name: 'dsh-bookshelf'
+      config:
+        doubanUserId: ''
+        libraryDir: ''

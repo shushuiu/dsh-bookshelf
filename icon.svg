@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Bookshelf">
+  <rect width="64" height="64" rx="14" fill="#2f6f5e"/>
+  <g fill="none" stroke="#f3f7f5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 46.5h36"/>
+    <path d="M17 46.5V22.5a2 2 0 0 1 2.4-1.96l6.2 1.2a2 2 0 0 1 1.6 1.96V46.5"/>
+    <path d="M27.2 46.5V18.4a2 2 0 0 1 2.4-1.96l6.2 1.2a2 2 0 0 1 1.6 1.96v26.9"/>
+    <path d="M37.4 46.5V26.1a2 2 0 0 1 2.4-1.96l6.2 1.2a2 2 0 0 1 1.6 1.96v19.2"/>
+    <path d="M20.6 28.4h3.4M30.8 24.2h3.4M41 31.6h3.4"/>
+  </g>
+</svg>

@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "title": {
+    "en": "My DSH plugin index",
+    "zh": "我的 DSH 插件索引"
+  },
+  "description": {
+    "en": "Index of my own DeepSeek Harness plugins.",
+    "zh": "我自己的 DeepSeek Harness 插件索引。"
+  },
+  "metadata": {
+    "categories": {
+      "reading": {
+        "title": {
+          "en": "Reading & documents",
+          "zh": "阅读与文档"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-bookshelf",
+      "title": {
+        "en": "Bookshelf",
+        "zh": "书架"
+      },
+      "description": {
+        "en": "A shelf built from a Douban member's 想读 list: covers, summaries and ratings, matched against your own ebook folder, readable in the panel, with public-domain downloads; unmatched papers and documents get their own Documents section.",
+        "zh": "按豆瓣「想读」书单排出的书架：封面、简介、评分，与你自己目录里的电子书（EPUB/PDF/TXT）自动配对，可在面板内直接阅读，也能从公版书库下载；没配对的论文与资料单独归到「资料」一栏维护。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkJvb2tzaGVsZiI+CiAgPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTQiIGZpbGw9IiMyZjZmNWUiLz4KICA8ZyBmaWxsPSJub25lIiBzdHJva2U9IiNmM2Y3ZjUiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDxwYXRoIGQ9Ik0xNCA0Ni41aDM2Ii8+CiAgICA8cGF0aCBkPSJNMTcgNDYuNVYyMi41YTIgMiAwIDAgMSAyLjQtMS45Nmw2LjIgMS4yYTIgMiAwIDAgMSAxLjYgMS45NlY0Ni41Ii8+CiAgICA8cGF0aCBkPSJNMjcuMiA0Ni41VjE4LjRhMiAyIDAgMCAxIDIuNC0xLjk2bDYuMiAxLjJhMiAyIDAgMCAxIDEuNiAxLjk2djI2LjkiLz4KICAgIDxwYXRoIGQ9Ik0zNy40IDQ2LjVWMjYuMWEyIDIgMCAwIDEgMi40LTEuOTZsNi4yIDEuMmEyIDIgMCAwIDEgMS42IDEuOTZ2MTkuMiIvPgogICAgPHBhdGggZD0iTTIwLjYgMjguNGgzLjRNMzAuOCAyNC4yaDMuNE00MSAzMS42aDMuNCIvPgogIDwvZz4KPC9zdmc+",
+      "metadata": {
+        "category": "reading",
+        "keywords": [
+          "dsh",
+          "dsh-plugin",
+          "deepseek-harness",
+          "douban",
+          "ebook",
+          "epub",
+          "pdf",
+          "reader",
+          "bookshelf"
+        ]
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793846799,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.0"
+          }
+        }
+      ]
+    }
+  ]
+}
