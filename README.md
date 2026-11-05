@@ -20,7 +20,16 @@ A DeepSeek Harness plugin: your Douban 想读 list as a shelf, paired with your 
 
 需要 Harness ≥ 0.2.0、Node ≥ 22。
 
-**从插件市场装**：`插件 → 发现 → 管理索引源…` 填入索引地址 → 添加 → 搜「书架」→ 安装。
+**从插件市场装**：
+
+1. `插件 → 发现 → 管理索引源…`
+2. 填入这条索引地址，点「添加」：
+
+   ```
+   https://cdn.jsdelivr.net/gh/shushuiu/dsh-bookshelf@main/publish/index.json
+   ```
+
+3. 回到「发现」刷新，搜「书架」→ 安装
 
 **从本地目录装**：把整个目录放到任意位置，让 agent 用 `plugin_manager` 的 `install_bundle` 指向这个目录的绝对路径，然后重启 Harness。侧边栏出现「书架」即装好。
 
