@@ -71,10 +71,10 @@ if (gitAt !== -1) {
 
 const index = {
   format: 1,
-  title: { en: 'My DSH plugin index', zh: '我的 DSH 插件索引' },
+  title: { en: 'shushuiu DSH plugins', zh: 'shushuiu 的 DSH 插件' },
   description: {
-    en: 'Index of my own DeepSeek Harness plugins.',
-    zh: '我自己的 DeepSeek Harness 插件索引。',
+    en: 'DeepSeek Harness plugins by shushuiu.',
+    zh: 'shushuiu 的 DeepSeek Harness 插件。',
   },
   metadata: {
     // Every category a plugin references must be declared here, otherwise the
