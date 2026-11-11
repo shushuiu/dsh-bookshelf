@@ -13,6 +13,15 @@
     "reader",
     "bookshelf"
   ],
+  "author": "shushuiu",
+  "homepage": "https://github.com/shushuiu/dsh-bookshelf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shushuiu/dsh-bookshelf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shushuiu/dsh-bookshelf/issues"
+  },
   "license": "MIT",
   "type": "module",
   "engines": {
