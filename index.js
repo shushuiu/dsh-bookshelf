@@ -825,6 +825,16 @@ class Shelf {
       }
       this.blockedUntil = 0;
       this.lastError = warning;
+      // Both shelves are newest-first on their own; one list newest-first again
+      // keeps 「全部书籍」 in a chronology instead of 想读 then 在读.
+      fetched.sort((a, b) => {
+        const left = typeof a.shelfDate === 'string' ? a.shelfDate : '';
+        const right = typeof b.shelfDate === 'string' ? b.shelfDate : '';
+        if (left === right) return 0;
+        if (left === '') return 1;
+        if (right === '') return -1;
+        return left < right ? 1 : -1;
+      });
       this.shelf = {
         userId,
         member: member ?? this.shelf.member,
