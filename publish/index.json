@@ -52,11 +52,11 @@
       "versions": [
         {
           "version": "1.0.0",
-          "publishTimestamp": 1794453762,
+          "publishTimestamp": 1794453822,
           "source": {
             "type": "git",
             "url": "https://github.com/shushuiu/dsh-bookshelf",
-            "commit": "e1f634c66b548893570be9d3309298547b2ed38c"
+            "commit": "3d48e41ed2aa3620cc4d16f0931653312f26c277"
           },
           "engines": {
             "dsh": ">=0.2.0"
