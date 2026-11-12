@@ -876,7 +876,7 @@ window.__ModuleLoader__.load({
     const TEXT_RENDER_LIMIT = 300000;
 
     /** Reading preferences survive the panel being closed, like a real reader. */
-    const READER_PREFS = { size: 17, serif: true, bilingual: false, original: true };
+    const READER_PREFS = { size: 17, serif: true, original: true };
 
     /** Paragraphs one translation request carries; the Host accepts 24. */
     const TRANSLATE_BATCH = 18;
@@ -884,6 +884,86 @@ window.__ModuleLoader__.load({
     /** Characters one translation batch carries, well under the Host's cap. */
     const TRANSLATE_BATCH_CHARS = 9000;
     const READER_STORE = 'dsh-bookshelf:reader';
+
+    /**
+     * Per-book translation choices: file id → whether the reader shows
+     * translations. Nothing global lives here: a bilingual run through a
+     * foreign novel must not switch translation on for the next Chinese book.
+     */
+    const TRANSLATE_STORE = 'dsh-bookshelf:translate';
+
+    /**
+     * Read every stored per-book translation choice.
+     * @returns file id → boolean.
+     */
+    function readTranslateChoices() {
+      try {
+        const raw = window.localStorage.getItem(TRANSLATE_STORE);
+        const parsed = raw === null ? undefined : JSON.parse(raw);
+        return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    /**
+     * The translation choice the user made for one book, if any.
+     * @param fileId - the book's file id.
+     * @returns true/false, or undefined when the user never toggled it.
+     */
+    function readTranslateChoice(fileId) {
+      if (typeof fileId !== 'string' || fileId === '') return undefined;
+      const value = readTranslateChoices()[fileId];
+      return typeof value === 'boolean' ? value : undefined;
+    }
+
+    /**
+     * Remember one book's translation choice.
+     * @param fileId - the book's file id.
+     * @param on - whether translations are shown.
+     */
+    function writeTranslateChoice(fileId, on) {
+      if (typeof fileId !== 'string' || fileId === '') return;
+      try {
+        const all = readTranslateChoices();
+        all[fileId] = on === true;
+        const entries = Object.entries(all).slice(-200);
+        window.localStorage.setItem(TRANSLATE_STORE, JSON.stringify(Object.fromEntries(entries)));
+      } catch {
+        // A blocked storage only costs the choice, not the reading.
+      }
+    }
+
+    /**
+     * A text sample long enough to tell which language a book is written in.
+     * @param reader - the reader payload.
+     * @returns the sample, capped at 4000 characters.
+     */
+    function languageSample(reader) {
+      if (reader?.kind === 'epub') {
+        let text = '';
+        for (const chapter of reader.chapters ?? []) {
+          for (const paragraph of chapter?.paragraphs ?? []) {
+            text += String(paragraph ?? ' ');
+            if (text.length >= 4000) return text;
+          }
+        }
+        return text;
+      }
+      if (typeof reader?.text === 'string') return reader.text.slice(0, 4000);
+      return '';
+    }
+
+    /**
+     * Whether a book is written in Chinese, read from its own text: 想读 and
+     * 在读 books are often Chinese editions, and translating those into English
+     * is never what the reader asked for.
+     * @param reader - the reader payload.
+     * @returns true for Chinese-dominant books.
+     */
+    function isChineseBook(reader) {
+      return !prefersEnglish(languageSample(reader));
+    }
 
     /**
      * Read the saved reading preferences.
@@ -897,7 +977,6 @@ window.__ModuleLoader__.load({
         return {
           size: Number.isFinite(size) && size >= 13 && size <= 26 ? size : READER_PREFS.size,
           serif: parsed?.serif === undefined ? READER_PREFS.serif : parsed.serif === true,
-          bilingual: parsed?.bilingual === true,
           original: parsed?.original === undefined ? READER_PREFS.original : parsed.original === true,
         };
       } catch {
@@ -915,8 +994,11 @@ window.__ModuleLoader__.load({
       const [size, setSize] = React.useState(initial.size);
       const [serif, setSerif] = React.useState(initial.serif);
       // Bilingual reading: the translation of the chapter on screen, fetched
-      // only when that chapter is actually opened.
-      const [bilingual, setBilingual] = React.useState(initial.bilingual);
+      // only when that chapter is actually opened. The user's own choice for
+      // this book wins; otherwise only a non-Chinese book starts translated.
+      const [bilingual, setBilingual] = React.useState(
+        () => readTranslateChoice(reader.file?.fileId) ?? !isChineseBook(reader),
+      );
       // The original page next to the text: the extracted text loses every
       // figure, table and formula, so the paper shows both.
       const [original, setOriginal] = React.useState(initial.original);
@@ -1043,6 +1125,14 @@ window.__ModuleLoader__.load({
         }
         setTranslating({ index: -1, done: 0, total: 0, error: '', partial });
       }, [chapters, fileId, t]);
+
+      // Another book in the same panel: its own saved choice, or its own
+      // language, decides whether translation starts on; nothing carries over.
+      React.useEffect(() => {
+        setBilingual(readTranslateChoice(fileId) ?? !isChineseBook(reader));
+        setTranslated({});
+        setTranslating({ index: -1, done: 0, total: 0, error: '' });
+      }, [fileId]);
 
       // Only the chapter on screen is translated, and only when bilingual mode
       // is on: moving to the next chapter asks for that one next.
@@ -1240,12 +1330,11 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener('keydown', onKey);
       }, [onClose]);
 
-      const savePrefs = (nextSize, nextSerif, nextBilingual = bilingual, nextOriginal = original) => {
+      const savePrefs = (nextSize, nextSerif, nextOriginal = original) => {
         try {
           window.localStorage.setItem(READER_STORE, JSON.stringify({
             size: nextSize,
             serif: nextSerif,
-            bilingual: nextBilingual,
             original: nextOriginal,
           }));
         } catch {
@@ -1382,7 +1471,8 @@ window.__ModuleLoader__.load({
                   anchorParagraph.current = topParagraph();
                   layoutVersion.current += 1;
                   setBilingual(next);
-                  savePrefs(size, serif, next);
+                  writeTranslateChoice(fileId, next);
+                  savePrefs(size, serif);
                   if (!next) setTranslating({ index: -1, done: 0, total: 0, error: '' });
                 },
               }, t('reader.translate'))
@@ -1426,7 +1516,7 @@ window.__ModuleLoader__.load({
                   layoutVersion.current += 1;
                   anchorParagraph.current = topParagraph();
                   setOriginal(next);
-                  savePrefs(size, serif, bilingual, next);
+                  savePrefs(size, serif, next);
                 },
               }, t('reader.original'))
               : null,
@@ -2320,7 +2410,7 @@ window.__ModuleLoader__.load({
         fmtSize,
         reading: { readProgress, writeProgress },
         paging: { locateInBook, scrollForPosition, snapToColumn, wheelDelta, wheelPage },
-        translation: { batchesOf, prefersEnglish },
+        translation: { batchesOf, prefersEnglish, languageSample, isChineseBook, readTranslateChoice, writeTranslateChoice },
         components: { BookCard, DetailSheet, Reader, SettingsForm, LibrarySection, PaperCard, BundleSettingsCard } },
     };
   },
