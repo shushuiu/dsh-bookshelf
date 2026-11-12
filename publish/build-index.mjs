@@ -33,6 +33,15 @@ const iconBytes = await readFile(join(root, manifest.icon ?? 'icon.svg'));
 const iconType = (manifest.icon ?? 'icon.svg').endsWith('.svg') ? 'image/svg+xml' : 'image/png';
 const icon = `data:${iconType};base64,${iconBytes.toString('base64')}`;
 
+/**
+ * The repository as the index schema wants it: a plain https URL.
+ * package.json's `git+https://….git` spelling is what npm expects, not what
+ * the market parser accepts.
+ */
+const repositoryUrl = manifest.repository?.url === undefined
+  ? undefined
+  : manifest.repository.url.replace(/^git\+/, '').replace(/\.git$/, '');
+
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
@@ -93,7 +102,7 @@ const index = {
       icon,
       author: manifest.author?.name ?? manifest.author ?? undefined,
       homepage: manifest.homepage,
-      repository: manifest.repository?.url === undefined ? undefined : { url: manifest.repository.url },
+      repository: repositoryUrl === undefined ? undefined : { url: repositoryUrl },
       metadata: { category: 'reading', keywords: manifest.keywords ?? [] },
       versions: [
         {
