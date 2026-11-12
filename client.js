@@ -1126,13 +1126,14 @@ window.__ModuleLoader__.load({
         setTranslating({ index: -1, done: 0, total: 0, error: '', partial });
       }, [chapters, fileId, t]);
 
-      // Another book in the same panel: its own saved choice, or its own
-      // language, decides whether translation starts on; nothing carries over.
+      // Another book in the same panel, or a PDF that just became extracted
+      // text: its own saved choice, or its own language, decides whether
+      // translation starts on; nothing carries over.
       React.useEffect(() => {
         setBilingual(readTranslateChoice(fileId) ?? !isChineseBook(reader));
         setTranslated({});
         setTranslating({ index: -1, done: 0, total: 0, error: '' });
-      }, [fileId]);
+      }, [fileId, reader.kind, reader.source]);
 
       // Only the chapter on screen is translated, and only when bilingual mode
       // is on: moving to the next chapter asks for that one next.
