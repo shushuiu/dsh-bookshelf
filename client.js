@@ -47,6 +47,11 @@ window.__ModuleLoader__.load({
       'panel.label': '书架',
       'panel.title': '书架',
       'panel.wishCount': '想读 {n} 本',
+      'panel.readingCount': '在读 {n} 本',
+      'panel.tabWish': '想读',
+      'panel.tabReading': '在读',
+      'panel.wishSince': '想读于 {date}',
+      'panel.readingSince': '在读 {date}',
       'panel.tabAll': '全部书籍',
       'panel.tabReadable': '可阅读',
       'panel.tabPending': '待补全',
@@ -486,6 +491,7 @@ window.__ModuleLoader__.load({
           on: file.readable === true,
         });
       }
+      if (book.shelf === 'do') chips.push({ key: 'shelf', label: t('panel.tabReading'), on: true });
       const remembered = (book.local ?? [])
         .filter((file) => file.readable === true)
         .map((file) => readProgress(file.fileId))
@@ -570,7 +576,9 @@ window.__ModuleLoader__.load({
                 : h('dl', { className: 'bks-kv' }, rows.map(([label, value]) => h(React.Fragment, { key: label },
                   h('dt', null, label),
                   h('dd', null, value)))),
-              book.wishDate !== undefined ? h('p', { className: 'bks-hint', style: { marginTop: '8px' } }, `想读于 ${book.wishDate}`) : null)),
+              book.shelfDate !== undefined
+                ? h('p', { className: 'bks-hint', style: { marginTop: '8px' } }, t(book.shelf === 'do' ? 'panel.readingSince' : 'panel.wishSince', { date: book.shelfDate }))
+                : null)),
           detail?.summary !== undefined
             ? h('section', { className: 'bks-section' },
               h('h3', null, t('detail.summary')),
@@ -1897,15 +1905,21 @@ window.__ModuleLoader__.load({
       const needle = query.trim().toLowerCase();
       const readable = books.filter((book) => (book.local ?? []).some((file) => file.readable)).length;
       const pending = books.filter((book) => book.detail === undefined).length;
+      const wish = books.filter((book) => book.shelf !== 'do').length;
+      const reading = books.filter((book) => book.shelf === 'do').length;
       const tabs = [
         { id: 'all', label: t('panel.tabAll'), count: books.length },
+        ...(reading > 0 ? [{ id: 'do', label: t('panel.tabReading'), count: reading }] : []),
+        ...(wish > 0 ? [{ id: 'wish', label: t('panel.tabWish'), count: wish }] : []),
         { id: 'readable', label: t('panel.tabReadable'), count: readable },
         { id: 'pending', label: t('panel.tabPending'), count: pending },
       ];
       const inTab = (book) => (
-        tab === 'readable' ? (book.local ?? []).some((file) => file.readable)
-          : tab === 'pending' ? book.detail === undefined
-            : true
+        tab === 'do' ? book.shelf === 'do'
+          : tab === 'wish' ? book.shelf !== 'do'
+            : tab === 'readable' ? (book.local ?? []).some((file) => file.readable)
+              : tab === 'pending' ? book.detail === undefined
+                : true
       );
       const visible = books
         .filter(inTab)
@@ -1925,6 +1939,8 @@ window.__ModuleLoader__.load({
             ? t('panel.loading')
             : [
               data.member === undefined ? `豆瓣 ${data.userId}` : `${data.member}（${data.userId}）`,
+              t('panel.wishCount', { n: wish }),
+              reading > 0 ? t('panel.readingCount', { n: reading }) : undefined,
               t('panel.localCount', { n: readable }),
               filling ? t('panel.filling', { done: progress.done, total: progress.total }) : undefined,
             ].filter(Boolean).join(' · ')),
@@ -2124,6 +2140,11 @@ window.__ModuleLoader__.load({
           'panel.label': 'Bookshelf',
           'panel.title': 'Bookshelf',
           'panel.wishCount': '{n} to read',
+          'panel.readingCount': '{n} reading',
+          'panel.tabWish': 'Want to read',
+          'panel.tabReading': 'Reading',
+          'panel.wishSince': 'Want to read since {date}',
+          'panel.readingSince': 'Reading since {date}',
           'panel.tabAll': 'All books',
           'panel.tabReadable': 'Readable',
           'panel.tabPending': 'Loading',

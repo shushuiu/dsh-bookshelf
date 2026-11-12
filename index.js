@@ -24,7 +24,8 @@ import {
   DoubanBlocked,
   fetchDoubanImage,
   fetchDoubanPage,
-  fetchWishShelf,
+  fetchShelf,
+  SHELVES,
   parseSubject,
 } from './lib/douban.js';
 import { contentTypeFor, isReadable, matchLibrary, readBook, readPdfMeta, renderPdfCover, renderPdfPage, readPdfText, safeFileStem, scanLibrary } from './lib/library.js';
@@ -249,8 +250,8 @@ async function writeUnique(dir, stem, ext, bytes) {
 }
 
 /**
- * The shelf's state: one Douban member's wish list, enriched with subject
- * details, plus the local library index and the user's preferences.
+ * The shelf's state: one Douban member's 想读 and 在读 lists, enriched with
+ * subject details, plus the local library index and the user's preferences.
  */
 class Shelf {
   /**
@@ -270,7 +271,7 @@ class Shelf {
       libraryDir: typeof settings.libraryDir === 'string' ? settings.libraryDir.trim() : '',
     };
     this.prefs = { ...this.defaults };
-    this.shelf = { userId: '', member: undefined, total: 0, updatedAt: 0, books: [] };
+    this.shelf = { userId: '', member: undefined, totals: { wish: 0, do: 0 }, updatedAt: 0, books: [] };
     this.library = { dir: '', files: [], scannedAt: 0, skipped: 0, error: undefined };
     this.blockedUntil = 0;
     this.lastError = undefined;
@@ -699,18 +700,36 @@ class Shelf {
       const raw = await fs.readFile(this.cachePath, 'utf8');
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed?.books)) {
+        // Caches written before the 在读 shelf existed have no `shelf` field and
+        // call the date `wishDate`; both migrate on read rather than on write.
+        const books = parsed.books
+          .filter((book) => book !== null && typeof book === 'object')
+          .map((book) => ({
+            ...book,
+            shelf: book.shelf === 'do' ? 'do' : 'wish',
+            shelfDate: book.shelfDate ?? book.wishDate,
+          }));
+        const totals = parsed.totals !== null && typeof parsed.totals === 'object'
+          ? {
+            wish: Number.isFinite(parsed.totals.wish) ? parsed.totals.wish : 0,
+            do: Number.isFinite(parsed.totals.do) ? parsed.totals.do : 0,
+          }
+          : {
+            wish: Number.isFinite(parsed.total) ? parsed.total : books.filter((book) => book.shelf === 'wish').length,
+            do: 0,
+          };
         return {
           userId: typeof parsed.userId === 'string' ? parsed.userId : '',
           member: typeof parsed.member === 'string' ? parsed.member : undefined,
-          total: Number.isFinite(parsed.total) ? parsed.total : parsed.books.length,
+          totals,
           updatedAt: Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0,
-          books: parsed.books.filter((book) => book !== null && typeof book === 'object'),
+          books,
         };
       }
     } catch {
       // First run, or the cache was removed: start empty.
     }
-    return { userId: '', member: undefined, total: 0, updatedAt: 0, books: [] };
+    return { userId: '', member: undefined, totals: { wish: 0, do: 0 }, updatedAt: 0, books: [] };
   }
 
   /**
@@ -721,13 +740,14 @@ class Shelf {
     const payload = {
       userId: this.shelf.userId,
       member: this.shelf.member,
-      total: this.shelf.total,
+      totals: this.shelf.totals,
       updatedAt: this.shelf.updatedAt,
       books: this.shelf.books.map((book) => ({
         subjectId: book.subjectId,
         title: book.title,
         url: book.url,
-        wishDate: book.wishDate,
+        shelf: book.shelf,
+        shelfDate: book.shelfDate,
         intro: book.intro,
         cover: book.cover,
         rating: book.rating,
@@ -767,32 +787,51 @@ class Shelf {
     if (userId.trim() === '') return { total: 0, member: undefined, skipped: true };
     if (this.refreshPromise !== undefined && options.userId === undefined) return await this.refreshPromise;
     const run = (async () => {
-      let result;
-      try {
-        result = await fetchWishShelf(userId, { withCovers: options.withCovers !== false });
-      } catch (error) {
-        if (!(error instanceof DoubanBlocked)) throw error;
+      const previous = this.shelf.books;
+      const previousById = new Map(previous.map((book) => [book.subjectId, book]));
+      const fetched = [];
+      const totals = { ...this.shelf.totals };
+      let member;
+      let blocked;
+      let warning;
+      for (const name of SHELVES) {
+        try {
+          const result = await fetchShelf(userId, name, { withCovers: options.withCovers !== false });
+          member ??= result.member;
+          totals[name] = Number.isFinite(result.total) ? result.total : result.rows.length;
+          fetched.push(...result.rows);
+          warning ??= result.coverWarning;
+          if (result.blocked !== undefined) blocked = result.blocked;
+        } catch (error) {
+          if (!(error instanceof DoubanBlocked)) throw error;
+          // One shelf refusing must not empty the other: the rows this shelf had
+          // stay on display, and the panel reports the cooldown.
+          blocked = error.status;
+          warning = error.message;
+          fetched.push(...previous.filter((book) => book.shelf === name));
+        }
+      }
+      if (blocked !== undefined) {
         this.blockedUntil = Date.now() + BLOCK_COOLDOWN_MS;
-        this.lastError = error.message;
+        this.lastError = warning;
         return {
           member: this.shelf.member,
-          total: this.shelf.total,
+          total: this.shelf.books.length,
+          totals: this.shelf.totals,
           books: this.shelf.books.length,
           stale: true,
-          error: error.message,
+          error: warning,
         };
       }
-      // The shelf text arrived; only the cover pass may have been refused.
-      this.blockedUntil = result.blocked === undefined ? 0 : Date.now() + BLOCK_COOLDOWN_MS;
-      this.lastError = result.coverWarning;
-      const previous = new Map(this.shelf.books.map((book) => [book.subjectId, book]));
+      this.blockedUntil = 0;
+      this.lastError = warning;
       this.shelf = {
         userId,
-        member: result.member,
-        total: result.total,
+        member: member ?? this.shelf.member,
+        totals,
         updatedAt: Date.now(),
-        books: result.rows.map((row) => {
-          const cached = previous.get(row.subjectId);
+        books: fetched.map((row) => {
+          const cached = previousById.get(row.subjectId);
           return {
             ...row,
             // Keep a subject page already read for a book still on the shelf.
@@ -805,7 +844,12 @@ class Shelf {
       };
       await this.writeShelf();
       this.startFilling();
-      return { member: this.shelf.member, total: this.shelf.total, books: this.shelf.books.length };
+      return {
+        member: this.shelf.member,
+        total: this.shelf.books.length,
+        totals,
+        books: this.shelf.books.length,
+      };
     })();
     this.refreshPromise = run;
     try {
@@ -1277,7 +1321,8 @@ class Shelf {
         subjectId: book.subjectId,
         title: book.title,
         url: book.url,
-        wishDate: book.wishDate,
+        shelf: book.shelf === 'do' ? 'do' : 'wish',
+        shelfDate: book.shelfDate,
         intro: book.intro,
         detail: book.detail === undefined ? undefined : {
           authors: book.detail.authors,
@@ -1321,7 +1366,8 @@ class Shelf {
       },
       member: this.shelf.member,
       userId: this.shelf.userId === '' ? this.prefs.doubanUserId : this.shelf.userId,
-      total: this.shelf.total,
+      total: books.length,
+      totals: this.shelf.totals,
       updatedAt: this.shelf.updatedAt || undefined,
       notice: this.lastError ?? this.takeMigrationNotice() ?? (this.prefs.doubanUserId === ''
         ? '先在「设置」里填上你的豆瓣 ID（豆瓣个人主页 /people/<ID>/wish 里的那串数字）'
@@ -1393,7 +1439,7 @@ const TOOL_OUTPUT_SCHEMA = {
 };
 
 const TOOL_DESCRIPTION = [
-  'Read the user\u2019s bookshelf: the Douban \u60f3\u8bfb list they follow, which of those books exist as',
+  'Read the user\u2019s bookshelf: the Douban \u60f3\u8bfb (want to read) and \u5728\u8bfb (currently reading) lists, which of those books exist as',
   'local files, and the text inside those local EPUB and TXT files.',
   'Use it whenever a question is about their books or the contents of a book —',
   'for example \u201cwhich of my books covers X\u201d, \u201cwhat is on my shelf\u201d, \u201cread chapter 3 of this one\u201d.',
@@ -1478,8 +1524,11 @@ function describeShelf(shelf, args) {
       : `书架还是空的。豆瓣那边：${shelf.lastError}`;
   }
   const local = books.filter((book) => shelf.matchesFor(book).length > 0).length;
+  const wish = books.filter((book) => book.shelf !== 'do').length;
+  const reading = books.filter((book) => book.shelf === 'do').length;
+  const counts = reading > 0 ? `（想读 ${wish} 本 · 在读 ${reading} 本）` : '';
   const lines = [
-    `豆瓣「想读」共 ${books.length} 本，其中 ${local} 本在你的本地书库里。`,
+    `豆瓣书单共 ${books.length} 本${counts}，其中 ${local} 本在你的本地书库里。`,
   ];
   if (shelf.fillProgress.running) {
     lines.push(`（详情还在后台补全：${shelf.fillProgress.done}/${shelf.fillProgress.total}）`);
@@ -1490,7 +1539,7 @@ function describeShelf(shelf, args) {
       detail?.authors?.join(' / '),
       detail?.publisher,
       detail?.year,
-      book.wishDate === undefined ? undefined : `想读 ${book.wishDate}`,
+      book.shelfDate === undefined ? undefined : `${book.shelf === 'do' ? '在读' : '想读'} ${book.shelfDate}`,
       describeFiles(shelf.matchesFor(book).map((match) => match.file)),
     ].filter(Boolean).join(' · ');
     lines.push(`${index + 1}. 《${book.title}》${meta === '' ? '' : ` — ${meta}`}`);
@@ -1525,7 +1574,7 @@ function describeBook(shelf, args) {
   push('出版年', detail?.year);
   push('ISBN', detail?.isbn);
   push('评分', detail?.rating === undefined ? undefined : `${detail.rating}（${detail.votes ?? '?'} 人评价）`);
-  push('想读于', book.wishDate);
+  push(book.shelf === 'do' ? '在读' : '想读于', book.shelfDate);
   push('豆瓣', book.url);
   if (detail?.summary !== undefined) push('简介', `${detail.summary.slice(0, 260)}${detail.summary.length > 260 ? '…' : ''}`);
   const files = shelf.matchesFor(book).map((match) => match.file);

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Bookshelf",
-    "description": "A shelf built from a Douban member's 想读 list: covers, summaries and ratings, matched against your own ebook folder, readable in the panel, with public-domain downloads; unmatched papers and documents get their own Documents section."
+    "description": "A shelf built from a Douban member's 想读 and 在读 lists: covers, summaries and ratings, matched against your own ebook folder, readable in the panel, with public-domain downloads; unmatched papers and documents get their own Documents section."
   }
 }
