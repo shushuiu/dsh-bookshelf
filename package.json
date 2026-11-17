@@ -1,6 +1,6 @@
 {
   "name": "dsh-bookshelf",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DeepSeek Harness plugin: a 书架 page built from a Douban member's 想读 and 在读 lists, paired with your own ebook folder, an in-panel EPUB/PDF/TXT reader, and public-domain downloads.",
   "keywords": [
     "dsh",
