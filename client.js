@@ -378,6 +378,30 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * The chapter that will scroll into view next, when it is close enough to be
+     * worth translating ahead of time.
+     *
+     * The reader is one continuous flow: the last page of a chapter already
+     * shows the head of the next one. Without this, that visible head stays
+     * untranslated until the chapter heading crosses the left edge, and the
+     * translation only lands on the page after that.
+     *
+     * @param layout - chapter offsets, page stride and the live scroll offset.
+     * @returns the chapter index to prefetch, or -1.
+     */
+    function nextChapterToPrefetch(layout) {
+      const { offsets, chapter, scrollLeft, clientWidth, pageStride, total } = layout ?? {};
+      const next = (Number.isInteger(chapter) ? chapter : 0) + 1;
+      if (!Array.isArray(offsets) || !Number.isInteger(total) || next >= total) return -1;
+      const start = offsets[next];
+      if (typeof start !== 'number' || !Number.isFinite(start)) return -1;
+      // One page of slack: the next chapter's heading is on the visible page or
+      // on the page after it, which is where the reader is about to go.
+      const reach = (scrollLeft ?? 0) + (clientWidth ?? 0) + (pageStride ?? 0);
+      return start <= reach ? next : -1;
+    }
+
+    /**
      * Whether a run of text is mostly Latin script, i.e. worth translating into
      * Chinese rather than out of it.
      * @param sample - the text to look at.
@@ -1016,6 +1040,9 @@ window.__ModuleLoader__.load({
       const anchorParagraph = React.useRef('');
       const [spread, setSpread] = React.useState({ index: 1, total: 1 });
       const [activeChapter, setActiveChapter] = React.useState(0);
+      // The chapter whose head is already on screen or one page away; its
+      // translation is fetched before the reader turns into it.
+      const [prefetch, setPrefetch] = React.useState(-1);
       const scroller = React.useRef(null);
       const layout = React.useRef({ key: '', offsets: [] });
       const restored = React.useRef(false);
@@ -1069,11 +1096,14 @@ window.__ModuleLoader__.load({
       /**
        * Translate one chapter, in batches, and let the text appear as it lands.
        *
-       * Only the chapter being read is ever sent: an 800-page book costs one
-       * chapter of translation, not a book.
+       * Only the chapter being read (plus the one about to be read) is ever
+       * sent: an 800-page book costs one chapter of translation, not a book.
        * @param index - chapter index.
+       * @param options - `background` prefetches the next chapter without taking
+       *   over the footer's progress line or reporting failures as page errors.
        */
-      const translateChapter = React.useCallback(async (index) => {
+      const translateChapter = React.useCallback(async (index, options = {}) => {
+        const background = options.background === true;
         const chapter = chapters[index];
         if (chapter === undefined) return;
         const paragraphs = (chapter.paragraphs ?? [])
@@ -1088,7 +1118,7 @@ window.__ModuleLoader__.load({
         let partial = 0;
         const lines = new Array(paragraphs.length).fill('');
         const target = prefersEnglish(paragraphs.join(' ')) ? 'zh-CN' : 'en';
-        setTranslating({ index, done: 0, total: paragraphs.length, error: '' });
+        if (!background) setTranslating({ index, done: 0, total: paragraphs.length, error: '' });
         for (const batch of batchesOf(paragraphs)) {
           const offset = cursor;
           cursor += batch.length;
@@ -1108,22 +1138,30 @@ window.__ModuleLoader__.load({
             }
             if (failedCount > 0) partial += failedCount;
           } catch (error) {
+            // A dropped prefetch is not a page the reader is looking at: forget
+            // it so the foreground run can try again when the chapter arrives.
             requested.current.delete(id);
-            setTranslating({
-              index: -1,
-              done: 0,
-              total: 0,
-              error: error instanceof Error ? error.message : String(error),
-            });
+            if (!background) {
+              setTranslating({
+                index: -1,
+                done: 0,
+                total: 0,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
             return;
           }
-          // Commit what arrived so the text fills in from the top down.
-          if (anchorParagraph.current === '') anchorParagraph.current = topParagraph();
+          // Commit what arrived so the text fills in from the top down. A
+          // background prefetch lands after the viewport, so it has no business
+          // moving the anchor the reader is holding.
+          if (!background && anchorParagraph.current === '') anchorParagraph.current = topParagraph();
           layoutVersion.current += 1;
           setTranslated((previous) => ({ ...previous, [index]: { lines: [...lines] } }));
-          setTranslating({ index, done: Math.min(paragraphs.length, cursor), total: paragraphs.length, error: '', partial });
+          if (!background) {
+            setTranslating({ index, done: Math.min(paragraphs.length, cursor), total: paragraphs.length, error: '', partial });
+          }
         }
-        setTranslating({ index: -1, done: 0, total: 0, error: '', partial });
+        if (!background) setTranslating({ index: -1, done: 0, total: 0, error: '', partial });
       }, [chapters, fileId, t]);
 
       // Another book in the same panel, or a PDF that just became extracted
@@ -1133,6 +1171,7 @@ window.__ModuleLoader__.load({
         setBilingual(readTranslateChoice(fileId) ?? !isChineseBook(reader));
         setTranslated({});
         setTranslating({ index: -1, done: 0, total: 0, error: '' });
+        setPrefetch(-1);
       }, [fileId, reader.kind, reader.source]);
 
       // Only the chapter on screen is translated, and only when bilingual mode
@@ -1141,6 +1180,16 @@ window.__ModuleLoader__.load({
         if (!bilingual || !positioned || reader.kind !== 'epub') return;
         void translateChapter(activeChapter);
       }, [bilingual, positioned, activeChapter, reader, translateChapter]);
+
+      // The head of the next chapter is often already on the visible page; fetch
+      // its translation now so it does not arrive raw, and so the page does not
+      // reflow the moment the reader turns into it. The current page keeps its
+      // place: translations are only inserted after the visible paragraphs.
+      React.useEffect(() => {
+        if (!bilingual || !positioned || reader.kind !== 'epub') return;
+        if (prefetch < 0) return;
+        void translateChapter(prefetch, { background: true });
+      }, [bilingual, positioned, prefetch, reader, translateChapter]);
 
       const measure = React.useCallback(() => {
         const element = scroller.current;
@@ -1191,6 +1240,15 @@ window.__ModuleLoader__.load({
           ? previous
           : { total: located.pages, index: located.index }));
         setActiveChapter((previous) => (previous === located.chapter ? previous : located.chapter));
+        const candidate = nextChapterToPrefetch({
+          offsets: info.offsets,
+          chapter: located.chapter,
+          scrollLeft: element.scrollLeft ?? 0,
+          clientWidth: width,
+          pageStride: info.pageStride,
+          total: chapters.length,
+        });
+        setPrefetch((previous) => (previous === candidate ? previous : candidate));
         // Smooth scrolling fires this on every frame; one bookmark per page is
         // enough, and it keeps storage writes off the scroll path.
         const stamp = `${located.chapter}:${located.offset}:${located.pages}`;
@@ -1232,6 +1290,10 @@ window.__ModuleLoader__.load({
       const turn = (direction) => {
         const element = scroller.current;
         if (element === null || element === undefined) return;
+        // A page turn the reader asked for outranks a pending reflow anchor: a
+        // translation landing while the smooth scroll runs would otherwise snap
+        // the flow back to where it was and swallow the turn.
+        anchorParagraph.current = '';
         const info = layoutInfo(element);
         const page = Math.round((element.scrollLeft ?? 0) / info.pageStride);
         const target = snapToColumn((page + direction) * info.pageStride, info.columnStride, info.maxScroll);
@@ -1243,6 +1305,7 @@ window.__ModuleLoader__.load({
       const jump = (chapter) => {
         const element = scroller.current;
         if (element === null || element === undefined) return;
+        anchorParagraph.current = '';
         const info = layoutInfo(element);
         const base = info.offsets[chapter];
         if (base === undefined) return;
@@ -1304,11 +1367,11 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener('resize', onResize);
       }, [measure]);
 
-      // Translations change the height of the flow: measure again and hold the
-      // paragraph that was on screen.
+      // Translations (and the switch that shows them) change the height of the
+      // flow: measure again and hold the paragraph that was on screen.
       React.useEffect(() => {
         measure();
-      }, [translated, measure]);
+      }, [translated, bilingual, measure]);
 
       // Opening or closing the original-page pane halves the text width, which
       // re-paginates everything: measure again after the browser has laid out.
@@ -1323,12 +1386,17 @@ window.__ModuleLoader__.load({
         const onKey = (event) => {
           if (event.key === 'Escape') { onClose(); return; }
           if (!['ArrowRight', 'PageDown', 'ArrowLeft', 'PageUp'].includes(event.key)) return;
+          // A chapter dropdown or a text field keeps its own arrow behaviour.
+          const tag = event.target?.tagName;
+          if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
           // A held key repeats fast; one page per repeat is enough.
           if (Date.now() - lastTurn.current < 180) return;
           turn(event.key === 'ArrowRight' || event.key === 'PageDown' ? 1 : -1);
         };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
+        // Capture phase: the reader also holds panes that scroll on their own
+        // (the original page), and a focused pane must not swallow the keys.
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
       }, [onClose]);
 
       const savePrefs = (nextSize, nextSerif, nextOriginal = original) => {
@@ -1352,7 +1420,7 @@ window.__ModuleLoader__.load({
         ? chapters.map((chapter, index) => [
           h('h2', { key: `h${index}`, 'data-chapter': String(index) }, chapter.title),
           ...(chapter.paragraphs ?? []).map((paragraph, position) => {
-            const line = translated[index]?.lines?.[position];
+            const line = bilingual ? translated[index]?.lines?.[position] : undefined;
             return h('div', {
               key: `${index}:${position}`,
               className: 'bks-para',
@@ -2411,7 +2479,7 @@ window.__ModuleLoader__.load({
         fmtSize,
         reading: { readProgress, writeProgress },
         paging: { locateInBook, scrollForPosition, snapToColumn, wheelDelta, wheelPage },
-        translation: { batchesOf, prefersEnglish, languageSample, isChineseBook, readTranslateChoice, writeTranslateChoice },
+        translation: { batchesOf, prefersEnglish, languageSample, isChineseBook, readTranslateChoice, writeTranslateChoice, nextChapterToPrefetch },
         components: { BookCard, DetailSheet, Reader, SettingsForm, LibrarySection, PaperCard, BundleSettingsCard } },
     };
   },

@@ -33,6 +33,8 @@ plugin/
 
 写在这里，免得以后重新踩一遍：
 
+- **下一章预取**：整本是一条连续流，章节末尾那页已经露着下一章开头；`nextChapterToPrefetch()` 在实测栏宽/偏移上判断下一章是否落在「当前页 + 一页」以内，命中就调用 `translateChapter(index, { background: true })` 静默翻译（不占底部进度、失败不报页面级错误，只删掉 `requested` 标记留给前台重试）。译文插在当前视口之后，`anchorParagraph` 保证当前页不跳。
+- **译文只在开关打开时渲染**：`translated` 缓存可以留着，但渲染层以 `bilingual` 为准，关掉立即隐藏；重新打开直接复用缓存，不再发请求。
 - **翻译通道**：优先用宿主 `translator` 服务，拿不到就退回插件自带的匿名 Google `translate_a/t` 批量端点（一次最多 20 段 / 5000 字，一章通常一个请求）。不用 `translate_a/single`——它只收单段 `q`，突发几个请求就 429。`translator` 在 profile 级插件里通常是 `undefined`，且默认的 Bing 通道 `edge.microsoft.com/translate/auth` 已经 404，所以不能当唯一通道。
 - **PDF 原页而不是把图塞进正文**：论文的图表多是矢量绘制，抽出来只能变低分辨率位图，表头和公式还会被拆散；直接并排显示原页既保真又便宜。
 - **栏宽实测**：翻页位置从页码反算绝对位置，再对齐到用 `getClientRects()` 量出来的实际栏宽。Chrome 的栏宽常是小数，按 `clientWidth + gap` 推算每页会差 0.3px，几十页后行首被切字。
